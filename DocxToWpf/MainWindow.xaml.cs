@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,6 +13,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.IO;
 
 namespace DocxToWpf
 {
@@ -23,6 +25,14 @@ namespace DocxToWpf
         public MainWindow()
         {
             InitializeComponent();
+
+            OpenFileDialog openFileDialog = new OpenFileDialog();
+            if (openFileDialog.ShowDialog() == true)
+            {
+                DocxToFlowDocumentConverter converter = new DocxToFlowDocumentConverter(new FileStream(openFileDialog.FileName, FileMode.Open));
+                converter.Read();
+                documentViewer.Document = converter.Document;
+            }
         }
     }
 }
