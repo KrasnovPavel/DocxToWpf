@@ -55,6 +55,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Page Include="DocTextElement.xaml" />
     <Page Include="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -62,6 +63,9 @@
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DocTextElement.xaml.cs">
+      <DependentUpon>DocTextElement.xaml</DependentUpon>
     </Compile>
     <Compile Include="DocxReading.cs" />
     <Compile Include="DocxToFlowDocumentConverter.cs" />

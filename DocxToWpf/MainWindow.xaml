@@ -6,8 +6,8 @@
         xmlns:local="clr-namespace:DocxToWpf"
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
-    <FlowDocumentPageViewer x:Name="documentViewer">
+    <FlowDocumentScrollViewer x:Name="documentViewer">
         <FlowDocument>
         </FlowDocument>
-    </FlowDocumentPageViewer>
+    </FlowDocumentScrollViewer>
 </Window>

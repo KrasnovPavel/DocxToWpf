@@ -56,28 +56,26 @@ namespace DocxToWpf
             FillAttribute = "fill";
         // Note: new members should also be added to nameTable in CreateNameTable method.
 
-        private FlowDocument document;
-        private TextElement current;// { set { if (!isCurrentUIElement) current = value; } get { return current; } }
-        private XElement current_label;
-        private bool hasAnyHyperlink;
-        private bool isCurrentUIElement = false;
+        private FlowDocument _document;
+        private TextElement _current;// { set { if (!isCurrentUIElement) current = value; } get { return current; } }
+        private XElement _currentLabel;
+        private bool _hasAnyHyperlink;
+        private bool _isCurrentUiElement;
         public XDocument labels;
 
-        public FlowDocument Document
-        {
-            get { return this.document; }
-        }
+        public FlowDocument Document => _document;
 
         public DocxToFlowDocumentConverter(Stream stream)
             : base(stream)
         {
+            // WTF?
             labels = XDocument.Parse("<labels></labels>");
             //labels.Add("<labels></labels>");
         }
 
         protected override XmlNameTable CreateNameTable()
         {
-            var nameTable = base.CreateNameTable();
+            XmlNameTable nameTable = base.CreateNameTable();
 
             nameTable.Add(BoldElement);
             nameTable.Add(ItalicElement);
@@ -115,118 +113,120 @@ namespace DocxToWpf
 
         protected override void ReadDocument(XmlReader reader)
         {
-            this.document = new FlowDocument();
-            this.document.BeginInit();
-            this.document.ColumnWidth = double.NaN;
+            _document = new FlowDocument();
+            _document.BeginInit();
+            _document.ColumnWidth = double.NaN;
 
             base.ReadDocument(reader);
 
-            if (this.hasAnyHyperlink)
-                this.document.AddHandler(Hyperlink.RequestNavigateEvent, new RequestNavigateEventHandler((sender, e) => Process.Start(e.Uri.ToString())));
-
-            this.document.EndInit();
+            if (_hasAnyHyperlink)
+            {
+                _document.AddHandler(Hyperlink.RequestNavigateEvent, 
+                                    new RequestNavigateEventHandler((sender, e) => Process.Start(e.Uri.ToString())));
+            }
+            _document.EndInit();
         }
 
         protected override void ReadParagraph(XmlReader reader)
         {
-            using (this.SetCurrent(new Paragraph()))
+            using (SetCurrent(new Paragraph()))
+            {
                 base.ReadParagraph(reader);
+            }
         }
 
         protected override void ReadBlockControl(XmlReader reader)
         {
-            using (this.SetCurrent(new BlockUIContainer()))
-            //using (this.SetCurrent(new Section()))
+            using (SetCurrent(new BlockUIContainer()))
             {
-                isCurrentUIElement = true;
-                current_label = new XElement("label");
+                _isCurrentUiElement = true;
+                _currentLabel = new XElement("label");
                 base.ReadBlockControl(reader);
-                isCurrentUIElement = false;
+                _isCurrentUiElement = false;
             }
         }
 
         protected override void ReadInlineControl(XmlReader reader)
         {
-            using (this.SetCurrent(new InlineUIContainer()))
-            //using (this.SetCurrent(new Floater()))
+            using (SetCurrent(new InlineUIContainer()))
             {
-                isCurrentUIElement = true;
-                current_label = new XElement("label");
+                _isCurrentUiElement = true;
+                _currentLabel = new XElement("label");
                 base.ReadInlineControl(reader);
-                isCurrentUIElement = false;
+                _isCurrentUiElement = false;
             }
         }
 
         protected override void ReadControlProperties(XmlReader reader)
         {
             while (reader.Read())
+            {
                 if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace)
                 {
                     switch (reader.LocalName)
                     {
                         case AliasElement:
-                            current_label.SetAttributeValue("alias", GetValueAttribute(reader));
+                            _currentLabel.SetAttributeValue("alias", GetValueAttribute(reader));
                             break;
                         case TagElement:
-                            current_label.SetAttributeValue("tag", GetValueAttribute(reader));
+                            _currentLabel.SetAttributeValue("tag", GetValueAttribute(reader));
                             break;
                     }
                 }
-            current.Name = current_label.Attribute("tag").Value;
-            string[] names = current.Name.Split(new char[] { '_' }, 2);
+            }
+            
+            _current.Name = _currentLabel.Attribute("tag")?.Value ?? "";
+            string[] names = _current.Name.Split(new [] { '_' }, 2);
             string ltype = names[0];
-            current_label.Name = ltype;
-            if (ltype == "text" || ltype == "list" || ltype == "table")
-                labels.Root.Add(current_label);
-            if (ltype == "col")
-                labels.Element("table_" + names[1]).Add(current_label);
-            if (ltype == "item")
-                labels.Element("list_" + names[1]).Add(current_label);
+            _currentLabel.Name = ltype;
+            
+            switch (ltype)
+            {
+                case "text":
+                case "list":
+                case "table":
+                    labels.Root?.Add(_currentLabel);
+                    break;
+                case "col":
+                    labels.Element("table_" + names[1])?.Add(_currentLabel);
+                    break;
+                case "item":
+                    labels.Element("list_" + names[1])?.Add(_currentLabel);
+                    break;
+            }
         }
 
         protected override void ReadTable(XmlReader reader)
         {
-    //        SetCurrent(new Table());
-    //        var rowGroup = new TableRowGroup();
-    //        AddChild(rowGroup);
-     //       using (SetCurrent(rowGroup))
-     // //      {
-     //           base.ReadTable(reader);
-      //      }
+            
         }
 
         protected override void ReadTableRow(XmlReader reader)
         {
-   //         var row = new TableRow();
-     //       AddChild(row);
-   //         using (SetCurrent(row))
-   //         {
-   //             base.ReadTableRow(reader);
-   //         }
+            
         }
 
         protected override void ReadTableCell(XmlReader reader)
         {
-           // var cell = new TableCell();
-       //     AddChild(cell);
-     //       using (SetCurrent(cell))
-     //       {
-     //           base.ReadTableCell(reader);
-     //       }
+            
         }
 
         protected override void ReadParagraphProperties(XmlReader reader)
         {
             while (reader.Read())
+            {
                 if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace)
                 {
-                    var paragraph = (Paragraph)this.current;
+                    Paragraph paragraph = (Paragraph)_current;
+                    
                     switch (reader.LocalName)
                     {
                         case AlignmentElement:
-                            var textAlignment = ConvertTextAlignment(GetValueAttribute(reader));
+                            TextAlignment? textAlignment = ConvertTextAlignment(GetValueAttribute(reader));
                             if (textAlignment.HasValue)
+                            {
                                 paragraph.TextAlignment = textAlignment.Value;
+                            }
                             break;
                         case PageBreakBeforeElement:
                             paragraph.BreakPageBefore = GetOnOffValueAttribute(reader);
@@ -238,31 +238,36 @@ namespace DocxToWpf
                             SetParagraphIndent(reader, paragraph);
                             break;
                         case ShadingElement:
-                            var background = GetShading(reader);
+                            Brush background = GetShading(reader);
                             if (background != null)
+                            {
                                 paragraph.Background = background;
+                            }
                             break;
                     }
                 }
+            }
         }
 
         protected override void ReadHyperlink(XmlReader reader)
         {
-            var id = reader[IdAttribute, RelationshipsNamespace];
+            string id = reader[IdAttribute, RelationshipsNamespace];
             if (!string.IsNullOrEmpty(id))
             {
-                var relationship = this.MainDocumentPart.GetRelationship(id);
+                PackageRelationship relationship = MainDocumentPart.GetRelationship(id);
                 if (relationship.TargetMode == TargetMode.External)
                 {
-                    this.hasAnyHyperlink = true;
+                    _hasAnyHyperlink = true;
 
-                    var hyperlink = new Hyperlink()
+                    Hyperlink hyperlink = new Hyperlink()
                     {
                         NavigateUri = relationship.TargetUri
                     };
 
-                    using (this.SetCurrent(hyperlink))
+                    using (SetCurrent(hyperlink))
+                    {
                         base.ReadHyperlink(reader);
+                    }
                     return;
                 }
             }
@@ -272,16 +277,19 @@ namespace DocxToWpf
 
         protected override void ReadRun(XmlReader reader)
         {
-            using (this.SetCurrent(new Span()))
+            using (SetCurrent(new Span()))
+            {
                 base.ReadRun(reader);
+            }
         }
 
         protected override void ReadRunProperties(XmlReader reader)
         {
             while (reader.Read())
+            {
                 if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace)
                 {
-                    var inline = (Inline)this.current;
+                    Inline inline = (Inline)_current;
                     switch (reader.LocalName)
                     {
                         case BoldElement:
@@ -291,83 +299,105 @@ namespace DocxToWpf
                             inline.FontStyle = GetOnOffValueAttribute(reader) ? FontStyles.Italic : FontStyles.Normal;
                             break;
                         case UnderlineElement:
-                            var underlineTextDecorations = GetUnderlineTextDecorations(reader, inline);
+                            TextDecorationCollection underlineTextDecorations = GetUnderlineTextDecorations(reader, inline);
                             if (underlineTextDecorations != null)
+                            {
                                 inline.TextDecorations.Add(underlineTextDecorations);
+                            }
                             break;
                         case StrikeElement:
                             if (GetOnOffValueAttribute(reader))
+                            {
                                 inline.TextDecorations.Add(TextDecorations.Strikethrough);
+                            }
                             break;
                         case DoubleStrikeElement:
                             if (GetOnOffValueAttribute(reader))
                             {
-                                inline.TextDecorations.Add(new TextDecoration() { Location = TextDecorationLocation.Strikethrough, PenOffset = this.current.FontSize * 0.015 });
-                                inline.TextDecorations.Add(new TextDecoration() { Location = TextDecorationLocation.Strikethrough, PenOffset = this.current.FontSize * -0.015 });
+                                inline.TextDecorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough, 
+                                                                                PenOffset = _current.FontSize * 0.015 });
+                                inline.TextDecorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough, 
+                                                                                PenOffset = _current.FontSize * -0.015 });
                             }
                             break;
                         case VerticalAlignmentElement:
-                            var baselineAlignment = GetBaselineAlignment(GetValueAttribute(reader));
+                            BaselineAlignment? baselineAlignment = GetBaselineAlignment(GetValueAttribute(reader));
                             if (baselineAlignment.HasValue)
                             {
                                 inline.BaselineAlignment = baselineAlignment.Value;
-                                if (baselineAlignment.Value == BaselineAlignment.Subscript || baselineAlignment.Value == BaselineAlignment.Superscript)
-                                    inline.FontSize *= 0.65; //MS Word 2002 size: 65% http://en.wikipedia.org/wiki/Subscript_and_superscript
+                                if (baselineAlignment.Value == BaselineAlignment.Subscript ||
+                                    baselineAlignment.Value == BaselineAlignment.Superscript)
+                                {
+                                    //MS Word 2002 size: 65% http://en.wikipedia.org/wiki/Subscript_and_superscript}}
+                                    inline.FontSize *= 0.65; 
+                                }
                             }
                             break;
                         case ColorElement:
-                            var color = GetColor(GetValueAttribute(reader));
+                            Color? color = GetColor(GetValueAttribute(reader));
                             if (color.HasValue)
+                            {
                                 inline.Foreground = new SolidColorBrush(color.Value);
+                            }
                             break;
                         case HighlightElement:
-                            var highlight = GetHighlightColor(GetValueAttribute(reader));
+                            Color? highlight = GetHighlightColor(GetValueAttribute(reader));
                             if (highlight.HasValue)
+                            {
                                 inline.Background = new SolidColorBrush(highlight.Value);
+                            }
                             break;
                         case FontElement:
-                            var fontFamily = reader[AsciiFontFamily, WordprocessingMLNamespace];
+                            string fontFamily = reader[AsciiFontFamily, WordprocessingMLNamespace];
                             if (!string.IsNullOrEmpty(fontFamily))
-                                inline.FontFamily = (FontFamily)new FontFamilyConverter().ConvertFromString(fontFamily);
+                            {
+                                inline.FontFamily =
+                                    (FontFamily) new FontFamilyConverter().ConvertFromString(fontFamily);
+                            }
                             break;
                         case FontSizeElement:
-                            var fontSize = reader[ValueAttribute, WordprocessingMLNamespace];
+                            string fontSize = reader[ValueAttribute, WordprocessingMLNamespace];
                             if (!string.IsNullOrEmpty(fontSize))
+                            {
                                 // Attribute Value / 2 = Points
                                 // Points * (96 / 72) = Pixels
-                                inline.FontSize = uint.Parse(fontSize) * 0.6666666666666667;
+                                inline.FontSize = uint.Parse(fontSize) * 2.0 / 3.0;
+                            }
                             break;
                         case RightToLeftTextElement:
                             inline.FlowDirection = (GetOnOffValueAttribute(reader)) ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
                             break;
                     }
                 }
+            }
         }
 
         protected override void ReadBreak(XmlReader reader)
         {
-            this.AddChild(new LineBreak());
+            AddChild(new LineBreak());
         }
 
         protected override void ReadTabCharacter(XmlReader reader)
         {
-            this.AddChild(new Run("\t"));
+            AddChild(new Run("\t"));
         }
 
         protected override void ReadText(XmlReader reader)
         {
-            this.AddChild(new Run(reader.ReadString()));
+            AddChild(new Run(reader.ReadString()));
         }
 
         private void AddChild(TextElement textElement)
         {
-            if (!isCurrentUIElement)
-                ((IAddChild)this.current ?? this.document).AddChild(textElement);
+            if (!_isCurrentUiElement)
+            {
+                ((IAddChild) _current ?? _document).AddChild(textElement);
+            }
         }
 
         private static bool GetOnOffValueAttribute(XmlReader reader)
         {
-            var value = GetValueAttribute(reader);
+            string value = GetValueAttribute(reader);
 
             switch (value)
             {
@@ -389,15 +419,19 @@ namespace DocxToWpf
         private static Color? GetColor(string colorString)
         {
             if (string.IsNullOrEmpty(colorString) || colorString == "auto")
+            {
                 return null;
+            }
 
-            return (Color)ColorConverter.ConvertFromString('#' + colorString);
+            return (Color) ColorConverter.ConvertFromString('#' + colorString);
         }
 
         private static Color? GetHighlightColor(string highlightString)
         {
             if (string.IsNullOrEmpty(highlightString) || highlightString == "auto")
+            {
                 return null;
+            }
 
             return (Color)ColorConverter.ConvertFromString(highlightString);
         }
@@ -420,9 +454,11 @@ namespace DocxToWpf
         private static double? ConvertTwipsToPixels(string twips)
         {
             if (string.IsNullOrEmpty(twips))
+            {
                 return null;
-            else
-                return ConvertTwipsToPixels(double.Parse(twips, CultureInfo.InvariantCulture));
+            }
+            
+            return ConvertTwipsToPixels(double.Parse(twips, CultureInfo.InvariantCulture));
         }
 
         private static double ConvertTwipsToPixels(double twips)
@@ -449,68 +485,68 @@ namespace DocxToWpf
 
         private static Thickness GetSpacing(XmlReader reader, Thickness margin)
         {
-            var after = ConvertTwipsToPixels(reader[SpacingAfterAttribute, WordprocessingMLNamespace]);
+            double? after = ConvertTwipsToPixels(reader[SpacingAfterAttribute, WordprocessingMLNamespace]);
             if (after.HasValue)
+            {
                 margin.Bottom = after.Value;
+            }
 
-            var before = ConvertTwipsToPixels(reader[SpacingBeforeAttribute, WordprocessingMLNamespace]);
+            double? before = ConvertTwipsToPixels(reader[SpacingBeforeAttribute, WordprocessingMLNamespace]);
             if (before.HasValue)
+            {
                 margin.Top = before.Value;
+            }
 
             return margin;
         }
 
         private static void SetParagraphIndent(XmlReader reader, Paragraph paragraph)
         {
-            var margin = paragraph.Margin;
+            Thickness margin = paragraph.Margin;
 
-            var left = ConvertTwipsToPixels(reader[LeftIndentationAttribute, WordprocessingMLNamespace]);
+            double? left = ConvertTwipsToPixels(reader[LeftIndentationAttribute, WordprocessingMLNamespace]);
             if (left.HasValue)
+            {
                 margin.Left = left.Value;
+            }
 
-            var right = ConvertTwipsToPixels(reader[RightIndentationAttribute, WordprocessingMLNamespace]);
+            double? right = ConvertTwipsToPixels(reader[RightIndentationAttribute, WordprocessingMLNamespace]);
             if (right.HasValue)
+            {
                 margin.Right = right.Value;
+            }
 
             paragraph.Margin = margin;
 
-            var firstLine = ConvertTwipsToPixels(reader[FirstLineIndentationAttribute, WordprocessingMLNamespace]);
+            double? firstLine = ConvertTwipsToPixels(reader[FirstLineIndentationAttribute, WordprocessingMLNamespace]);
             if (firstLine.HasValue)
+            {
                 paragraph.TextIndent = firstLine.Value;
+            }
 
-            var hanging = ConvertTwipsToPixels(reader[HangingIndentationAttribute, WordprocessingMLNamespace]);
+            double? hanging = ConvertTwipsToPixels(reader[HangingIndentationAttribute, WordprocessingMLNamespace]);
             if (hanging.HasValue)
+            {
                 paragraph.TextIndent -= hanging.Value;
+            }
         }
 
         private static Brush GetShading(XmlReader reader)
         {
-            var color = GetColor(reader[FillAttribute, WordprocessingMLNamespace]);
+            Color? color = GetColor(reader[FillAttribute, WordprocessingMLNamespace]);
             return color.HasValue ? new SolidColorBrush(color.Value) : null;
         }
 
         private static TextDecorationCollection GetUnderlineTextDecorations(XmlReader reader, Inline inline)
         {
             TextDecoration textDecoration;
-            Brush brush;
-            var color = GetColor(reader[ColorAttribute, WordprocessingMLNamespace]);
+            
+            Color? color = GetColor(reader[ColorAttribute, WordprocessingMLNamespace]);
+            Brush brush = color.HasValue ? new SolidColorBrush(color.Value) : inline.Foreground;
 
-            if (color.HasValue)
-                brush = new SolidColorBrush(color.Value);
-            else
-                brush = inline.Foreground;
-
-            var textDecorations = new TextDecorationCollection()
-            {
-                (textDecoration = new TextDecoration()
-                {
-                    Location = TextDecorationLocation.Underline,
-                    Pen = new Pen()
-                    {
-                        Brush = brush
-                    }
-                })
-            };
+            TextDecorationCollection textDecorations = new TextDecorationCollection {
+                (textDecoration = new TextDecoration { Location = TextDecorationLocation.Underline,
+                                                       Pen = new Pen { Brush = brush } }) };
 
             switch (GetValueAttribute(reader))
             {
@@ -535,6 +571,7 @@ namespace DocxToWpf
                     textDecoration.Pen.DashStyle = DashStyles.DashDotDot;
                     break;
                 case "none":
+                    // fallthrough
                 default:
                     // If underline type is none or unsupported then it will be ignored.
                     return null;
@@ -543,27 +580,27 @@ namespace DocxToWpf
             return textDecorations;
         }
 
-        private IDisposable SetCurrent(TextElement current)
+        private IDisposable SetCurrent(TextElement currentElement)
         {
-            return new CurrentHandle(this, current);
+            return new CurrentHandle(this, currentElement);
         }
 
         private struct CurrentHandle : IDisposable
         {
-            private readonly DocxToFlowDocumentConverter converter;
-            private readonly TextElement previous;
+            private readonly DocxToFlowDocumentConverter _converter;
+            private readonly TextElement _previous;
 
             public CurrentHandle(DocxToFlowDocumentConverter converter, TextElement current)
             {
-                this.converter = converter;
-                this.converter.AddChild(current);
-                this.previous = this.converter.current;
-                this.converter.current = current;
+                _converter = converter;
+                _converter.AddChild(current);
+                _previous = _converter._current;
+                _converter._current = current;
             }
 
             public void Dispose()
             {
-                this.converter.current = this.previous;
+                _converter._current = _previous;
             }
         }
     }

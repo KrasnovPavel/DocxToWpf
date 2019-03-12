@@ -9,8 +9,8 @@ namespace DocxToWpf
     {
         /// <summary> Наименования xml тегов из которых состоит docx файл. </summary>
         protected const string
-
-            MainDocumentRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",
+            MainDocumentRelationshipType =
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",
 
             // XML namespaces
             WordprocessingMLNamespace = "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
@@ -50,7 +50,7 @@ namespace DocxToWpf
 
         protected virtual XmlNameTable CreateNameTable()
         {
-            var nameTable = new NameTable();
+            NameTable nameTable = new NameTable();
 
             nameTable.Add(WordprocessingMLNamespace);
             nameTable.Add(RelationshipsNamespace);
@@ -76,112 +76,128 @@ namespace DocxToWpf
             return nameTable;
         }
 
-        private readonly Package package;
-        private readonly PackagePart mainDocumentPart;
+        private readonly Package _package;
+        private readonly PackagePart _mainDocumentPart;
 
-        protected PackagePart MainDocumentPart
-        {
-            get { return this.mainDocumentPart; }
-        }
+        protected PackagePart MainDocumentPart => _mainDocumentPart;
 
         public DocxReader(Stream stream)
         {
             if (stream == null)
-                throw new ArgumentNullException("stream");
-
-            this.package = Package.Open(stream, FileMode.Open, FileAccess.Read);
-
-            foreach (var relationship in this.package.GetRelationshipsByType(MainDocumentRelationshipType))
             {
-                this.mainDocumentPart = package.GetPart(PackUriHelper.CreatePartUri(relationship.TargetUri));
+                throw new ArgumentNullException("stream");
+            }
+
+            _package = Package.Open(stream, FileMode.Open, FileAccess.Read);
+
+            foreach (PackageRelationship relationship in _package.GetRelationshipsByType(MainDocumentRelationshipType))
+            {
+                _mainDocumentPart = _package.GetPart(PackUriHelper.CreatePartUri(relationship.TargetUri));
                 break;
             }
         }
 
         public void Read()
         {
-            using (var mainDocumentStream = this.mainDocumentPart.GetStream(FileMode.Open, FileAccess.Read))
-            using (var reader = XmlReader.Create(mainDocumentStream, new XmlReaderSettings()
+            using (Stream mainDocumentStream = _mainDocumentPart.GetStream(FileMode.Open, FileAccess.Read))
             {
-                NameTable = this.CreateNameTable(),
-                IgnoreComments = true,
-                IgnoreProcessingInstructions = true,
-                IgnoreWhitespace = true
-            }))
-                this.ReadMainDocument(reader);
+                using (XmlReader reader = XmlReader.Create(mainDocumentStream, new XmlReaderSettings {
+                                                                                    NameTable = CreateNameTable(),
+                                                                                    IgnoreComments = true,
+                                                                                    IgnoreProcessingInstructions = true,
+                                                                                    IgnoreWhitespace = true}))
+                {
+                    ReadMainDocument(reader);
+                }
+            }
         }
 
         private static void ReadXmlSubtree(XmlReader reader, Action<XmlReader> action)
         {
-            if (action != null)
-                using (var subtreeReader = reader.ReadSubtree())
-                {
-                    // Position on the first node.
-                    subtreeReader.Read();
-
-
-                    action(subtreeReader);
-                }
+            if (action == null) return;
+            
+            using (XmlReader subtreeReader = reader.ReadSubtree())
+            {
+                // Position on the first node.
+                subtreeReader.Read();
+                action(subtreeReader);
+            }
         }
 
         private void ReadMainDocument(XmlReader reader)
         {
             while (reader.Read())
-                if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace && reader.LocalName == DocumentElement)
+            {
+                if (reader.NodeType == XmlNodeType.Element 
+                    && reader.NamespaceURI == WordprocessingMLNamespace 
+                    && reader.LocalName == DocumentElement)
                 {
-                    ReadXmlSubtree(reader, this.ReadDocument);
+                    ReadXmlSubtree(reader, ReadDocument);
                     break;
                 }
+            }
         }
 
         protected virtual void ReadDocument(XmlReader reader)
         {
             while (reader.Read())
-                if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace && reader.LocalName == BodyElement)
+            {
+                if (reader.NodeType == XmlNodeType.Element 
+                    && reader.NamespaceURI == WordprocessingMLNamespace 
+                    && reader.LocalName == BodyElement)
                 {
-                    ReadXmlSubtree(reader, this.ReadBody);
+                    ReadXmlSubtree(reader, ReadBody);
                     break;
                 }
+            }
         }
 
         private void ReadBody(XmlReader reader)
         {
             while (reader.Read())
-                this.ReadBlockLevelElement(reader);
+            {
+                ReadBlockLevelElement(reader);
+            }
         }
 
         private void ReadBlockLevelElement(XmlReader reader)
         {
-            if (reader.NodeType == XmlNodeType.Element)
+            if (reader.NodeType != XmlNodeType.Element) return;
+            
+            Action<XmlReader> action = null;
+            if (reader.NamespaceURI == WordprocessingMLNamespace)
             {
-                Action<XmlReader> action = null;
-
-                if (reader.NamespaceURI == WordprocessingMLNamespace)
-                    switch (reader.LocalName)
-                    {
-                        case ParagraphElement:
-                            action = this.ReadParagraph;
-                            break;
-                        case TableElement:
-                            action = this.ReadTable;
-                            break;
-                        case ControlElement:
-                            action = this.ReadBlockControl;
-                            break;
-                    }
-
-                ReadXmlSubtree(reader, action);
+                switch (reader.LocalName)
+                {
+                    case ParagraphElement:
+                        action = ReadParagraph;
+                        break;
+                    case TableElement:
+                        action = ReadTable;
+                        break;
+                    case ControlElement:
+                        action = ReadBlockControl;
+                        break;
+                }
             }
+            
+            ReadXmlSubtree(reader, action);
         }
 
         protected virtual void ReadParagraph(XmlReader reader)
         {
             while (reader.Read())
             {
-                if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace && reader.LocalName == ParagraphPropertiesElement)
-                    ReadXmlSubtree(reader, this.ReadParagraphProperties);
+                if (reader.NodeType == XmlNodeType.Element 
+                    && reader.NamespaceURI == WordprocessingMLNamespace 
+                    && reader.LocalName == ParagraphPropertiesElement)
+                {
+                    ReadXmlSubtree(reader, ReadParagraphProperties);
+                }
                 else
-                    this.ReadInlineLevelElement(reader);
+                {
+                    ReadInlineLevelElement(reader);
+                }
             }
         }
 
@@ -189,11 +205,17 @@ namespace DocxToWpf
         {
             while (reader.Read())
             {
-                if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace && reader.LocalName == ControlPropertiesElement)
-                    ReadXmlSubtree(reader, this.ReadControlProperties);
-                else if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace && reader.LocalName == ControlContentElement)
+                if (reader.NodeType == XmlNodeType.Element 
+                    && reader.NamespaceURI == WordprocessingMLNamespace 
+                    && reader.LocalName == ControlPropertiesElement)
                 {
-                    ReadXmlSubtree(reader, this.ReadBlockControlContent);
+                    ReadXmlSubtree(reader, ReadControlProperties);
+                }
+                else if (reader.NodeType == XmlNodeType.Element 
+                         && reader.NamespaceURI == WordprocessingMLNamespace 
+                         && reader.LocalName == ControlContentElement)
+                {
+                    ReadXmlSubtree(reader, ReadBlockControlContent);
                 }
                 //this.ReadControlContent(reader);
             }
@@ -203,12 +225,19 @@ namespace DocxToWpf
         {
             while (reader.Read())
             {
-                if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace && reader.LocalName == ControlPropertiesElement)
-                    ReadXmlSubtree(reader, this.ReadControlProperties);
-                else if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace && reader.LocalName == ControlContentElement)
+                if (reader.NodeType == XmlNodeType.Element 
+                    && reader.NamespaceURI == WordprocessingMLNamespace 
+                    && reader.LocalName == ControlPropertiesElement)
+                {
+                    ReadXmlSubtree(reader, ReadControlProperties);
+                }
+                else if (reader.NodeType == XmlNodeType.Element
+                         && reader.NamespaceURI == WordprocessingMLNamespace 
+                         && reader.LocalName == ControlContentElement)
                 {
                     ReadXmlSubtree(reader, this.ReadInlineControlContent);
                 }
+
                 //this.ReadControlContent(reader);
             }
         }
@@ -219,8 +248,7 @@ namespace DocxToWpf
             {
                 if (reader.NodeType == XmlNodeType.Element)
                 {
-
-                    this.ReadBlockLevelElement(reader);
+                    ReadBlockLevelElement(reader);
                 }
             }
         }
@@ -231,143 +259,164 @@ namespace DocxToWpf
             {
                 if (reader.NodeType == XmlNodeType.Element)
                 {
-                    this.ReadInlineLevelElement(reader);
-
+                    ReadInlineLevelElement(reader);
                 }
             }
         }
 
         protected virtual void ReadControlProperties(XmlReader reader)
         {
-
+            
         }
 
         protected virtual void ReadParagraphProperties(XmlReader reader)
         {
-
+            
         }
 
         private void ReadInlineLevelElement(XmlReader reader)
         {
-            if (reader.NodeType == XmlNodeType.Element)
-            {
-                Action<XmlReader> action = null;
+            if (reader.NodeType != XmlNodeType.Element) return;
+            Action<XmlReader> action = null;
 
-                if (reader.NamespaceURI == WordprocessingMLNamespace)
-                    switch (reader.LocalName)
-                    {
-                        case SimpleFieldElement:
-                            action = this.ReadSimpleField;
-                            break;
+            if (reader.NamespaceURI == WordprocessingMLNamespace)
+                switch (reader.LocalName)
+                {
+                    case SimpleFieldElement:
+                        action = ReadSimpleField;
+                        break;
 
-                        case HyperlinkElement:
-                            action = this.ReadHyperlink;
-                            break;
+                    case HyperlinkElement:
+                        action = ReadHyperlink;
+                        break;
 
-                        case RunElement:
-                            action = this.ReadRun;
-                            break;
-                        case ControlElement:
-                            action = this.ReadInlineControl;
-                            break;
-                    }
+                    case RunElement:
+                        action = ReadRun;
+                        break;
+                    case ControlElement:
+                        action = ReadInlineControl;
+                        break;
+                }
 
-                ReadXmlSubtree(reader, action);
-            }
+            ReadXmlSubtree(reader, action);
         }
 
         private void ReadSimpleField(XmlReader reader)
         {
             while (reader.Read())
-                this.ReadInlineLevelElement(reader);
+            {
+                ReadInlineLevelElement(reader);
+            }
         }
 
         protected virtual void ReadHyperlink(XmlReader reader)
         {
             while (reader.Read())
-                this.ReadInlineLevelElement(reader);
+            {
+                ReadInlineLevelElement(reader);
+            }
         }
 
         protected virtual void ReadRun(XmlReader reader)
         {
             while (reader.Read())
             {
-                if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace && reader.LocalName == RunPropertiesElement)
-                    ReadXmlSubtree(reader, this.ReadRunProperties);
+                if (reader.NodeType == XmlNodeType.Element 
+                    && reader.NamespaceURI == WordprocessingMLNamespace 
+                    && reader.LocalName == RunPropertiesElement)
+                {
+                    ReadXmlSubtree(reader, ReadRunProperties);
+                }
                 else
-                    this.ReadRunContentElement(reader);
+                {
+                    ReadRunContentElement(reader);
+                }
             }
         }
 
         protected virtual void ReadRunProperties(XmlReader reader)
         {
-
+            
         }
 
         private void ReadRunContentElement(XmlReader reader)
         {
-            if (reader.NodeType == XmlNodeType.Element)
+            if (reader.NodeType != XmlNodeType.Element) return;
+            Action<XmlReader> action = null;
+
+            if (reader.NamespaceURI == WordprocessingMLNamespace)
             {
-                Action<XmlReader> action = null;
+                switch (reader.LocalName)
+                {
+                    case BreakElement:
+                        action = ReadBreak;
+                        break;
 
-                if (reader.NamespaceURI == WordprocessingMLNamespace)
-                    switch (reader.LocalName)
-                    {
-                        case BreakElement:
-                            action = this.ReadBreak;
-                            break;
+                    case TabCharacterElement:
+                        action = ReadTabCharacter;
+                        break;
 
-                        case TabCharacterElement:
-                            action = this.ReadTabCharacter;
-                            break;
-
-                        case TextElement:
-                            action = this.ReadText;
-                            break;
-                    }
-
-                ReadXmlSubtree(reader, action);
+                    case TextElement:
+                        action = ReadText;
+                        break;
+                }
             }
+
+            ReadXmlSubtree(reader, action);
         }
 
         protected virtual void ReadBreak(XmlReader reader)
         {
-
+            
         }
 
         protected virtual void ReadTabCharacter(XmlReader reader)
         {
-
+            
         }
 
         protected virtual void ReadText(XmlReader reader)
         {
-
+            
         }
 
         protected virtual void ReadTable(XmlReader reader)
         {
             while (reader.Read())
-                if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace && reader.LocalName == TableRowElement)
-                    ReadXmlSubtree(reader, this.ReadTableRow);
+            {
+                if (reader.NodeType == XmlNodeType.Element 
+                    && reader.NamespaceURI == WordprocessingMLNamespace 
+                    && reader.LocalName == TableRowElement)
+                {
+                    ReadXmlSubtree(reader, ReadTableRow);
+                }
+            }
         }
 
         protected virtual void ReadTableRow(XmlReader reader)
         {
             while (reader.Read())
-                if (reader.NodeType == XmlNodeType.Element && reader.NamespaceURI == WordprocessingMLNamespace && reader.LocalName == TableCellElement)
-                    ReadXmlSubtree(reader, this.ReadTableCell);
+            {
+                if (reader.NodeType == XmlNodeType.Element 
+                    && reader.NamespaceURI == WordprocessingMLNamespace 
+                    && reader.LocalName == TableCellElement)
+                {
+                    ReadXmlSubtree(reader, ReadTableCell);
+                }
+            }
         }
 
         protected virtual void ReadTableCell(XmlReader reader)
         {
             while (reader.Read())
-                this.ReadBlockLevelElement(reader);
+            {
+                ReadBlockLevelElement(reader);
+            }
         }
 
         public void Dispose()
         {
-            this.package.Close();
+            _package.Close();
         }
     }
 }
