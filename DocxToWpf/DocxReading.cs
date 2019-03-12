@@ -285,11 +285,9 @@ namespace DocxToWpf
                     case SimpleFieldElement:
                         action = ReadSimpleField;
                         break;
-
                     case HyperlinkElement:
                         action = ReadHyperlink;
                         break;
-
                     case RunElement:
                         action = ReadRun;
                         break;
@@ -351,11 +349,9 @@ namespace DocxToWpf
                     case BreakElement:
                         action = ReadBreak;
                         break;
-
                     case TabCharacterElement:
                         action = ReadTabCharacter;
                         break;
-
                     case TextElement:
                         action = ReadText;
                         break;

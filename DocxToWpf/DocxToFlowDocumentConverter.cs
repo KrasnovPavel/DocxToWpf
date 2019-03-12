@@ -198,17 +198,35 @@ namespace DocxToWpf
 
         protected override void ReadTable(XmlReader reader)
         {
-            
+            // TODO: Read table properties
+            using (SetCurrent(new Table()))
+            {
+                using (SetCurrent(new TableRowGroup()))
+                {
+                    base.ReadTable(reader);
+                }
+            }
         }
 
         protected override void ReadTableRow(XmlReader reader)
         {
-            
+            // TODO: Read row properties
+            using (SetCurrent(new TableRow()))
+            {
+                base.ReadTableRow(reader);
+            }
         }
 
         protected override void ReadTableCell(XmlReader reader)
         {
-            
+            // TODO: Read cell properties
+            using (SetCurrent(new TableCell()))
+            {
+                TableCell cell = (TableCell) _current;
+                cell.BorderBrush = new SolidColorBrush(Color.FromRgb(0,0,0));
+                cell.BorderThickness = new Thickness(1);
+                base.ReadTableCell(reader);
+            }
         }
 
         protected override void ReadParagraphProperties(XmlReader reader)
@@ -259,10 +277,7 @@ namespace DocxToWpf
                 {
                     _hasAnyHyperlink = true;
 
-                    Hyperlink hyperlink = new Hyperlink()
-                    {
-                        NavigateUri = relationship.TargetUri
-                    };
+                    Hyperlink hyperlink = new Hyperlink { NavigateUri = relationship.TargetUri };
 
                     using (SetCurrent(hyperlink))
                     {
@@ -423,7 +438,7 @@ namespace DocxToWpf
                 return null;
             }
 
-            return (Color) ColorConverter.ConvertFromString('#' + colorString);
+            return (Color)ColorConverter.ConvertFromString('#' + colorString);
         }
 
         private static Color? GetHighlightColor(string highlightString)
