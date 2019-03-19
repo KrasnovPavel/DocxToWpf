@@ -39,6 +39,12 @@ namespace DocxToWpf
             TableRowElement = "tr",
             TableCellElement = "tc",
 
+            //Table properties
+            TablePropertiesElement = "tblPr",
+            TableGridElement = "tblGrid",
+            TableRowPropertiesElement = "trPr",
+            TableCellPropertiesElement = "tcPr",
+
             //Control elements
             ControlContentElement = "sdtContent",
 
@@ -68,6 +74,10 @@ namespace DocxToWpf
             nameTable.Add(RunPropertiesElement);
             nameTable.Add(TableRowElement);
             nameTable.Add(TableCellElement);
+            nameTable.Add(TablePropertiesElement);
+            nameTable.Add(TableGridElement);
+            nameTable.Add(TableRowPropertiesElement);
+            nameTable.Add(TableCellPropertiesElement);
 
             nameTable.Add(ControlElement);
             nameTable.Add(ControlContentElement);

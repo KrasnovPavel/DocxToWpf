@@ -17,7 +17,6 @@ namespace DocxToWpf
     {
         /// <summary> Наименования xml тегов из которых состоит docx файл. </summary>
         private const string
-
             // Run properties elements
             BoldElement = "b",
             ItalicElement = "i",
