@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.IO.Packaging;
+using System.Linq;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Markup;
@@ -52,11 +53,18 @@ namespace DocxToWpf
             RightIndentationAttribute = "right",
             HangingIndentationAttribute = "hanging",
             FirstLineIndentationAttribute = "firstLine",
-            FillAttribute = "fill";
+            FillAttribute = "fill",
+            WidthAttribute = "w",
+        
+            TableGridColumnElement = "gridCol",
+            TableCellColumnSpan = "gridSpan",
+            TableCellRowSpan = "vMerge";
         // Note: new members should also be added to nameTable in CreateNameTable method.
 
         private FlowDocument _document;
         private TextElement _current;// { set { if (!isCurrentUIElement) current = value; } get { return current; } }
+        private Table _currentTable;
+        private RowSpanConverter _rowSpanConverter;
         private XElement _currentLabel;
         private bool _hasAnyHyperlink;
         private bool _isCurrentUiElement;
@@ -103,9 +111,13 @@ namespace DocxToWpf
             nameTable.Add(HangingIndentationAttribute);
             nameTable.Add(FirstLineIndentationAttribute);
             nameTable.Add(FillAttribute);
+            nameTable.Add(WidthAttribute);
 
             nameTable.Add(AliasElement);
             nameTable.Add(TagElement);
+            nameTable.Add(TableGridColumnElement);
+            nameTable.Add(TableCellColumnSpan);
+            nameTable.Add(TableCellRowSpan);
 
             return nameTable;
         }
@@ -197,28 +209,68 @@ namespace DocxToWpf
 
         protected override void ReadTable(XmlReader reader)
         {
-            // TODO: Read table properties
             using (SetCurrent(new Table()))
             {
+                _currentTable = (Table) _current;
+                _rowSpanConverter = new RowSpanConverter(_currentTable);
+                
                 using (SetCurrent(new TableRowGroup()))
                 {
                     base.ReadTable(reader);
+                }
+
+                _rowSpanConverter.SetupTable();
+                _currentTable = null;
+            }
+        }
+
+        protected override void ReadTableGrid(XmlReader reader)
+        {
+            while (reader.Read())
+            {
+                if (reader.NodeType == XmlNodeType.Element 
+                    && reader.NamespaceURI == WordprocessingMLNamespace
+                    && reader.LocalName == TableGridColumnElement)
+                {
+                    _currentTable.Columns.Add(new TableColumn());
+
+                    _currentTable.Columns.Last().Width = new GridLength(ConvertTwipsToPixels(reader[WidthAttribute, 
+                                                                                             WordprocessingMLNamespace])
+                                                                        ?? 100);
+                }
+            }
+        }
+
+        protected override void ReadTableProperties(XmlReader reader)
+        {
+            _currentTable.BorderBrush = new SolidColorBrush(Color.FromRgb(0,0,0));
+            _currentTable.BorderThickness = new Thickness(1);
+            _currentTable.CellSpacing = 0;
+            
+            while (reader.Read())
+            {
+                if (reader.NodeType == XmlNodeType.Element 
+                    && reader.NamespaceURI == WordprocessingMLNamespace
+                    && reader.LocalName == ShadingElement)
+                {
+                    _currentTable.Background = new SolidColorBrush(GetColor(reader[FillAttribute, 
+                                                                                    WordprocessingMLNamespace])
+                                                                    ?? new Color());
                 }
             }
         }
 
         protected override void ReadTableRow(XmlReader reader)
         {
-            // TODO: Read row properties
             using (SetCurrent(new TableRow()))
             {
+                _rowSpanConverter.AddRow();
                 base.ReadTableRow(reader);
             }
         }
 
         protected override void ReadTableCell(XmlReader reader)
         {
-            // TODO: Read cell properties
             using (SetCurrent(new TableCell()))
             {
                 TableCell cell = (TableCell) _current;
@@ -226,6 +278,37 @@ namespace DocxToWpf
                 cell.BorderThickness = new Thickness(1);
                 base.ReadTableCell(reader);
             }
+        }
+
+        protected override void ReadTableCellProperties(XmlReader reader)
+        {
+            TableCell cell = (TableCell) _current;
+            bool cellHasContinue = false;
+            while (reader.Read())
+            {
+                if (reader.NodeType == XmlNodeType.Element 
+                    && reader.NamespaceURI == WordprocessingMLNamespace)
+                {
+                    switch (reader.LocalName)
+                    {
+                        case ShadingElement:
+                            cell.Background = new SolidColorBrush(GetColor(reader[FillAttribute, 
+                                                                                   WordprocessingMLNamespace])
+                                                                           ?? new Color());
+                            break;
+                        case TableCellColumnSpan:
+                            cell.ColumnSpan = int.Parse(GetValueAttribute(reader));
+                            break;
+                        case TableCellRowSpan:
+                            if (GetValueAttribute(reader) != "restart")
+                            {
+                                cellHasContinue = true;
+                            }
+                            break;
+                    }
+                }
+            }
+            _rowSpanConverter.AddCell(cell.ColumnSpan, cellHasContinue);
         }
 
         protected override void ReadParagraphProperties(XmlReader reader)
@@ -602,7 +685,7 @@ namespace DocxToWpf
         private struct CurrentHandle : IDisposable
         {
             private readonly DocxToFlowDocumentConverter _converter;
-            private readonly TextElement _previous;
+            public readonly TextElement _previous;
 
             public CurrentHandle(DocxToFlowDocumentConverter converter, TextElement current)
             {

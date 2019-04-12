@@ -1,4 +1,4 @@
-﻿using Microsoft.Win32;
+using Microsoft.Win32;
 using System.Windows;
 using System.IO;
 
@@ -13,6 +13,10 @@ namespace DocxToWpf
         {
             InitializeComponent();
 
+        }
+
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
             OpenFileDialog openFileDialog = new OpenFileDialog();
             if (openFileDialog.ShowDialog() == true)
             {

@@ -8,6 +8,11 @@
         Title="MainWindow" Height="450" Width="800">
     <FlowDocumentScrollViewer x:Name="documentViewer">
         <FlowDocument>
+            <Paragraph>
+                <InlineUIContainer>
+                    <Button Content="Button" Width="75" Click="Button_Click"/>
+                </InlineUIContainer>
+            </Paragraph>
         </FlowDocument>
     </FlowDocumentScrollViewer>
 </Window>

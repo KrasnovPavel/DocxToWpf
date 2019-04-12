@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.IO.Packaging;
 using System.Xml;
@@ -390,13 +390,37 @@ namespace DocxToWpf
         {
             while (reader.Read())
             {
-                if (reader.NodeType == XmlNodeType.Element 
-                    && reader.NamespaceURI == WordprocessingMLNamespace 
-                    && reader.LocalName == TableRowElement)
+                if (reader.NodeType != XmlNodeType.Element) continue;
+                Action<XmlReader> action = null;
+
+                if (reader.NamespaceURI == WordprocessingMLNamespace)
                 {
-                    ReadXmlSubtree(reader, ReadTableRow);
+                    switch (reader.LocalName)
+                    {
+                        case TableRowElement:
+                            action = ReadTableRow;
+                            break;
+                        case TablePropertiesElement:
+                            action = ReadTableProperties;
+                            break;
+                        case TableGridElement:
+                            action = ReadTableGrid;
+                            break;
+                    }
                 }
+
+                ReadXmlSubtree(reader, action);
             }
+        }
+
+        protected virtual void ReadTableGrid(XmlReader reader)
+        {
+            
+        }
+
+        protected virtual void ReadTableProperties(XmlReader reader)
+        {
+            
         }
 
         protected virtual void ReadTableRow(XmlReader reader)
@@ -416,8 +440,28 @@ namespace DocxToWpf
         {
             while (reader.Read())
             {
-                ReadBlockLevelElement(reader);
+                if (reader.NodeType != XmlNodeType.Element) continue;
+                Action<XmlReader> action = null;
+
+                if (reader.NamespaceURI == WordprocessingMLNamespace)
+                {
+                    if (reader.LocalName == TableCellPropertiesElement)
+                    {
+                        action = ReadTableCellProperties;
+                    }
+                    else
+                    {
+                        action = ReadBlockLevelElement;
+                    }
+                }
+
+                ReadXmlSubtree(reader, action);
             }
+        }
+
+        protected virtual void ReadTableCellProperties(XmlReader reader)
+        {
+            
         }
 
         public void Dispose()
